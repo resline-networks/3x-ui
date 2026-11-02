@@ -263,6 +263,8 @@ jobs:
 
           # Version info + manifest resource: a bare stripped Go exe scores high on AV heuristics.
           PANEL_VERSION=$(tr -d '[:space:]' < internal/config/version)
+          # Windows resource versions are numeric only: drop the -resline.N suffix.
+          PANEL_VERSION=${PANEL_VERSION%%-*}
           go run github.com/tc-hib/go-winres@v0.3.3 make --arch amd64 \
             --product-version "$PANEL_VERSION" --file-version "$PANEL_VERSION"
 
