@@ -927,23 +927,42 @@ func (x *XrayAPI) GetTraffic() ([]*Traffic, []*ClientTraffic, error) {
 }
 
 // OnlineIP is one source address of a live connection, with the unix time (seconds)
-// the core last dispatched a link from it.
+// the core last dispatched a link from it. Uplink/Downlink are the bytes the
+// resline xray fork counted for this (user, IP) entry since it was created; nil
+// means the core did not report them (an upstream core), which is not zero.
 type OnlineIP struct {
 	IP       string `json:"ip"`
 	LastSeen int64  `json:"lastSeen"`
+	Uplink   *int64 `json:"uplink,omitempty"`
+	Downlink *int64 `json:"downlink,omitempty"`
 }
 
 // OnlineUser is a client email with at least one live connection and the source
 // IPs of those connections, as tracked by Xray's statsUserOnline policy.
+// OfflineIPs is filled only by GetUsersIPTraffic: addresses whose connections
+// all closed but whose byte counters the core still keeps. They are not live
+// and must never count toward online state or the IP limit.
 type OnlineUser struct {
-	Email string     `json:"email"`
-	IPs   []OnlineIP `json:"ips"`
+	Email      string     `json:"email"`
+	IPs        []OnlineIP `json:"ips"`
+	OfflineIPs []OnlineIP `json:"offlineIps,omitempty"`
 }
 
 // GetOnlineUsers returns every user with at least one live connection plus their
 // source IPs, via StatsService.GetUsersStats (one RPC covers all users). Requires
 // statsUserOnline enabled in the policy levels; older cores return Unimplemented.
 func (x *XrayAPI) GetOnlineUsers() ([]OnlineUser, error) {
+	return x.getUsersStats(false)
+}
+
+// GetUsersIPTraffic is GetOnlineUsers plus each user's offline IPs, so the bytes
+// of a connection that opened and closed between two polls are not lost. A user
+// may come back with only OfflineIPs: that user is not online.
+func (x *XrayAPI) GetUsersIPTraffic() ([]OnlineUser, error) {
+	return x.getUsersStats(true)
+}
+
+func (x *XrayAPI) getUsersStats(includeOffline bool) ([]OnlineUser, error) {
 	if x.grpcClient == nil {
 		return nil, common.NewError("xray api is not initialized")
 	}
@@ -954,7 +973,7 @@ func (x *XrayAPI) GetOnlineUsers() ([]OnlineUser, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
-	resp, err := (*x.StatsServiceClient).GetUsersStats(ctx, &statsService.GetUsersStatsRequest{})
+	resp, err := (*x.StatsServiceClient).GetUsersStats(ctx, &statsService.GetUsersStatsRequest{IncludeOfflineIps: includeOffline})
 	if err != nil {
 		return nil, err
 	}
@@ -964,16 +983,32 @@ func (x *XrayAPI) GetOnlineUsers() ([]OnlineUser, error) {
 		if u == nil || u.GetEmail() == "" {
 			continue
 		}
-		ips := make([]OnlineIP, 0, len(u.GetIps()))
-		for _, entry := range u.GetIps() {
-			if entry == nil || entry.GetIp() == "" {
-				continue
+		user := OnlineUser{Email: u.GetEmail(), IPs: onlineIPsFromProto(u.GetIps())}
+		if includeOffline {
+			if offline := onlineIPsFromProto(u.GetOfflineIps()); len(offline) > 0 {
+				user.OfflineIPs = offline
 			}
-			ips = append(ips, OnlineIP{IP: entry.GetIp(), LastSeen: entry.GetLastSeen()})
 		}
-		users = append(users, OnlineUser{Email: u.GetEmail(), IPs: ips})
+		users = append(users, user)
 	}
 	return users, nil
+}
+
+func onlineIPsFromProto(entries []*statsService.OnlineIPEntry) []OnlineIP {
+	ips := make([]OnlineIP, 0, len(entries))
+	for _, entry := range entries {
+		if entry == nil || entry.GetIp() == "" {
+			continue
+		}
+		ip := OnlineIP{IP: entry.GetIp(), LastSeen: entry.GetLastSeen()}
+		// Both or neither: a half-reported pair cannot be turned into a delta.
+		if entry.Uplink != nil && entry.Downlink != nil {
+			up, down := entry.GetUplink(), entry.GetDownlink()
+			ip.Uplink, ip.Downlink = &up, &down
+		}
+		ips = append(ips, ip)
+	}
+	return ips
 }
 
 // IsUnimplementedErr reports whether err is the running core saying it lacks an

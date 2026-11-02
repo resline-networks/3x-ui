@@ -18,33 +18,68 @@ import (
 // observations under its panelGuid, and the master merges every node's
 // guid-keyed report — never mixing in IPs a parent pushed down.
 
-// Attribution excludes empty addresses and keeps each fresh IP's maximum timestamp.
-func mergeModelClientIpEntries(old, incoming []model.ClientIpEntry, cutoff int64) []model.ClientIpEntry {
-	ipMap := make(map[string]int64, len(old)+len(incoming))
+// Attribution excludes empty addresses and keeps each fresh IP's maximum
+// timestamp. With addBytes, incoming byte counters are this panel's per-scan
+// deltas and are added to the stored ones; without it they are a node's own
+// cumulative totals and replace them (a lower value is that node's reset
+// passed through). An incoming entry without counters
+// leaves the stored ones alone. An incoming entry that is already past the
+// cutoff (an offline IP whose last dispatch is old) cannot create or refresh an
+// entry, but its bytes still land on an entry that is fresh.
+func mergeModelClientIpEntries(old, incoming []model.ClientIpEntry, cutoff int64, addBytes bool) []model.ClientIpEntry {
+	byIP := make(map[string]model.ClientIpEntry, len(old)+len(incoming))
 	for _, e := range old {
 		if e.IP == "" || e.Timestamp < cutoff {
 			continue
 		}
-		ipMap[e.IP] = e.Timestamp
+		byIP[e.IP] = copyClientIpEntry(e)
 	}
 	for _, e := range incoming {
-		if e.IP == "" || e.Timestamp < cutoff {
+		if e.IP == "" {
 			continue
 		}
-		if cur, ok := ipMap[e.IP]; !ok || e.Timestamp > cur {
-			ipMap[e.IP] = e.Timestamp
+		cur, ok := byIP[e.IP]
+		if !ok {
+			if e.Timestamp < cutoff {
+				continue
+			}
+			byIP[e.IP] = copyClientIpEntry(e)
+			continue
 		}
+		if e.Timestamp > cur.Timestamp {
+			cur.Timestamp = e.Timestamp
+		}
+		if e.Uplink != nil && e.Downlink != nil {
+			up, down := *e.Uplink, *e.Downlink
+			if addBytes && cur.Uplink != nil && cur.Downlink != nil {
+				up += *cur.Uplink
+				down += *cur.Downlink
+			}
+			cur.Uplink, cur.Downlink = &up, &down
+		}
+		byIP[e.IP] = cur
 	}
-	out := make([]model.ClientIpEntry, 0, len(ipMap))
-	for ip, ts := range ipMap {
-		out = append(out, model.ClientIpEntry{IP: ip, Timestamp: ts})
+	out := make([]model.ClientIpEntry, 0, len(byIP))
+	for _, e := range byIP {
+		out = append(out, e)
+	}
+	return out
+}
+
+// copyClientIpEntry detaches the byte counters so merged rows never share
+// pointers with the caller's slices.
+func copyClientIpEntry(e model.ClientIpEntry) model.ClientIpEntry {
+	out := model.ClientIpEntry{IP: e.IP, Timestamp: e.Timestamp}
+	if e.Uplink != nil && e.Downlink != nil {
+		up, down := *e.Uplink, *e.Downlink
+		out.Uplink, out.Downlink = &up, &down
 	}
 	return out
 }
 
 // upsertNodeClientIps merges fresh observations per (guid, email).
 // Empty results delete attribution instead of retaining expired rows.
-func upsertNodeClientIps(guid string, perEmail map[string][]model.ClientIpEntry) error {
+func upsertNodeClientIps(guid string, perEmail map[string][]model.ClientIpEntry, addBytes bool) error {
 	if guid == "" || len(perEmail) == 0 {
 		return nil
 	}
@@ -83,7 +118,7 @@ func upsertNodeClientIps(guid string, perEmail map[string][]model.ClientIpEntry)
 		if cur, ok := existingByEmail[email]; ok && cur.Ips != "" {
 			_ = json.Unmarshal([]byte(cur.Ips), &old)
 		}
-		merged := mergeModelClientIpEntries(old, incoming, cutoff)
+		merged := mergeModelClientIpEntries(old, incoming, cutoff, addBytes)
 		if len(merged) == 0 {
 			// Nothing fresh: drop any stale row so attribution doesn't linger.
 			if _, ok := existingByEmail[email]; ok {
@@ -111,9 +146,11 @@ func upsertNodeClientIps(guid string, perEmail map[string][]model.ClientIpEntry)
 	return tx.Commit().Error
 }
 
-// RecordLocalClientIps stores the scanner's local observations under this panel's GUID.
+// RecordLocalClientIps stores the scanner's local observations under this panel's
+// GUID. Byte counters on the entries are this scan's deltas and are added to the
+// stored totals.
 func (s *InboundService) RecordLocalClientIps(panelGuid string, observed map[string][]model.ClientIpEntry) error {
-	return upsertNodeClientIps(panelGuid, observed)
+	return upsertNodeClientIps(panelGuid, observed, true)
 }
 
 // MergeClientIpsByGuid folds a node's guid-keyed attribution report (its own
@@ -139,7 +176,8 @@ func (s *InboundService) MergeClientIpsByGuid(node *model.Node, trees map[string
 		}
 	}
 	for guid, perEmail := range trees {
-		if err := upsertNodeClientIps(guid, perEmail); err != nil {
+		// A node reports its own cumulative totals: they replace ours.
+		if err := upsertNodeClientIps(guid, perEmail, false); err != nil {
 			return err
 		}
 	}
@@ -165,7 +203,7 @@ func (s *InboundService) GetClientIpsByGuid() (map[string]map[string][]model.Cli
 		if err := json.Unmarshal([]byte(row.Ips), &entries); err != nil {
 			continue
 		}
-		fresh := mergeModelClientIpEntries(nil, entries, cutoff)
+		fresh := mergeModelClientIpEntries(nil, entries, cutoff, false)
 		if len(fresh) == 0 {
 			continue
 		}
@@ -174,6 +212,81 @@ func (s *InboundService) GetClientIpsByGuid() (map[string]map[string][]model.Cli
 			out[row.NodeGuid] = make(map[string][]model.ClientIpEntry)
 		}
 		out[row.NodeGuid][row.Email] = fresh
+	}
+	return out, nil
+}
+
+// GetAllInboundClientIpsWithTraffic is GetAllInboundClientIps as the clientIps
+// API serves it: every IP entry also carries the bytes counted for that client
+// and IP, summed over every attribution subtree this panel holds (its own scans
+// plus each node's reports). Only the response carries them; the stored flat
+// blob, which drives the IP limit, is never rewritten. An IP no subtree counted
+// carries no bytes. Note the sum can step down when one node's entry ages out
+// while another's continues; per-node values are in clientIpsByGuid.
+func (s *InboundService) GetAllInboundClientIpsWithTraffic() ([]model.InboundClientIps, error) {
+	rows, err := s.GetAllInboundClientIps()
+	if err != nil || len(rows) == 0 {
+		return rows, err
+	}
+	totals, err := clusterClientIpTraffic()
+	if err != nil {
+		return nil, err
+	}
+	for i := range rows {
+		perIP := totals[rows[i].ClientEmail]
+		if len(perIP) == 0 || rows[i].Ips == "" {
+			continue
+		}
+		var entries []model.ClientIpEntry
+		if err := json.Unmarshal([]byte(rows[i].Ips), &entries); err != nil {
+			continue // legacy string-array blob: nothing to annotate
+		}
+		annotated := false
+		for k := range entries {
+			if t, ok := perIP[entries[k].IP]; ok {
+				up, down := t[0], t[1]
+				entries[k].Uplink, entries[k].Downlink = &up, &down
+				annotated = true
+			}
+		}
+		if !annotated {
+			continue
+		}
+		if encoded, err := json.Marshal(entries); err == nil {
+			rows[i].Ips = string(encoded)
+		}
+	}
+	return rows, nil
+}
+
+// clusterClientIpTraffic sums the fresh, counted attribution entries per
+// (email, ip): email -> ip -> {uplink, downlink}.
+func clusterClientIpTraffic() (map[string]map[string][2]int64, error) {
+	db := database.GetDB()
+	var rows []model.NodeClientIp
+	if err := db.Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	cutoff := time.Now().Unix() - clientIpStaleAfterSeconds
+	out := make(map[string]map[string][2]int64)
+	for _, row := range rows {
+		if row.Email == "" || row.Ips == "" {
+			continue
+		}
+		var entries []model.ClientIpEntry
+		if err := json.Unmarshal([]byte(row.Ips), &entries); err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if e.IP == "" || e.Timestamp < cutoff || e.Uplink == nil || e.Downlink == nil {
+				continue
+			}
+			if out[row.Email] == nil {
+				out[row.Email] = make(map[string][2]int64)
+			}
+			t := out[row.Email][e.IP]
+			out[row.Email][e.IP] = [2]int64{t[0] + *e.Uplink, t[1] + *e.Downlink}
+		}
 	}
 	return out, nil
 }
@@ -313,7 +426,7 @@ func pruneStaleNodeClientIps(cutoff int64) error {
 				continue
 			}
 		}
-		kept := mergeModelClientIpEntries(nil, entries, cutoff)
+		kept := mergeModelClientIpEntries(nil, entries, cutoff, false)
 		if len(kept) == 0 {
 			if err := db.Delete(&model.NodeClientIp{}, row.Id).Error; err != nil {
 				return err

@@ -25,9 +25,18 @@ import (
 )
 
 // onlineUsersSource is the one service.XrayService method the scan needs, so
-// tests can drive Run end to end without a live xray core.
+// tests can drive Run end to end without a live xray core. Users carry their
+// offline IPs too (OnlineUser.OfflineIPs); only byte accounting reads those.
 type onlineUsersSource interface {
 	GetOnlineUsers() ([]xray.OnlineUser, bool, error)
+}
+
+// ipTrafficSource asks the core for online users plus offline IPs, so the bytes
+// of a connection that closed between two scans still reach the meter.
+type ipTrafficSource struct{ xray *service.XrayService }
+
+func (s ipTrafficSource) GetOnlineUsers() ([]xray.OnlineUser, bool, error) {
+	return s.xray.GetUsersIPTraffic()
 }
 
 // CheckClientIpJob monitors client IP addresses and manages IP blocking based
@@ -39,6 +48,7 @@ type CheckClientIpJob struct {
 	onlineUsers onlineUsersSource
 	allowlist   ipLimitAllowlist
 	lastIpPrune int64
+	ipMeter     ipTrafficMeter
 }
 
 const defaultXrayAPIPort = 62789
@@ -50,12 +60,12 @@ const ipPruneIntervalSeconds = int64(5 * 60)
 
 // NewCheckClientIpJob creates a new client IP monitoring job instance.
 func NewCheckClientIpJob() *CheckClientIpJob {
-	return &CheckClientIpJob{onlineUsers: &service.XrayService{}}
+	return &CheckClientIpJob{onlineUsers: ipTrafficSource{xray: &service.XrayService{}}}
 }
 
 func (j *CheckClientIpJob) Run() {
 	j.pruneStaleIpRows()
-	observed, apiMode := j.collectFromOnlineAPI()
+	observed, traffic, apiMode := j.collectFromOnlineAPI()
 	// Kernel-mode AmneziaWG peers never reach Xray, so its online users cannot
 	// see them; their connect locations come from the kernel interface instead.
 	kernelIPs := amneziawgkern.GetCollector().ClientIPs()
@@ -96,7 +106,7 @@ func (j *CheckClientIpJob) Run() {
 	if enforce {
 		j.allowlist = j.loadAllowlist()
 	}
-	j.processObserved(observed, enforce, true)
+	j.processScan(observed, traffic, enforce, true)
 }
 
 // resolveEnforce decides whether limits can actually be enforced this run: a
@@ -112,18 +122,21 @@ func (j *CheckClientIpJob) resolveEnforce(f2bEnabled, hasLimit, f2bInstalled, ne
 }
 
 // collectFromOnlineAPI builds per-email IP observations (email -> ip ->
-// last-seen unix seconds) from the core's online-stats API. ok=false means the
-// API is unavailable — xray not running, an older core, or a transient gRPC
-// failure — and the caller skips the run (there is no access-log fallback).
-func (j *CheckClientIpJob) collectFromOnlineAPI() (map[string]map[string]int64, bool) {
+// last-seen unix seconds) from the core's online-stats API, plus this scan's
+// per-IP byte deltas. Observations come from live IPs only, exactly as before;
+// offline IPs feed the byte meter alone. ok=false means the API is unavailable
+// — xray not running, an older core, or a transient gRPC failure — and the
+// caller skips the run (there is no access-log fallback).
+func (j *CheckClientIpJob) collectFromOnlineAPI() (map[string]map[string]int64, map[string][]ipTrafficDelta, bool) {
 	onlineUsers, ok, err := j.onlineUsers.GetOnlineUsers()
 	if err != nil {
 		logger.Debug("[LimitIP] online-stats API unavailable this run:", err)
-		return nil, false
+		return nil, nil, false
 	}
 	if !ok {
-		return nil, false
+		return nil, nil, false
 	}
+	traffic := j.ipMeter.measure(onlineUsers)
 	now := time.Now().Unix()
 	observed := make(map[string]map[string]int64, len(onlineUsers))
 	for _, user := range onlineUsers {
@@ -142,7 +155,7 @@ func (j *CheckClientIpJob) collectFromOnlineAPI() (map[string]map[string]int64, 
 			}
 		}
 	}
-	return observed, true
+	return observed, traffic, true
 }
 
 // hasLimitIp reports whether any client carries an IP limit. It probes the
@@ -291,6 +304,13 @@ func (j *CheckClientIpJob) loadClientIpRows(emails []string) map[string]*model.I
 // transaction, so a scan costs a handful of queries and one fsync instead of
 // several per observed email.
 func (j *CheckClientIpJob) processObserved(observed map[string]map[string]int64, enforce, observedAreLive bool) bool {
+	return j.processScan(observed, nil, enforce, observedAreLive)
+}
+
+// processScan is processObserved plus this scan's per-IP byte deltas, which
+// only ever reach the attribution rows: ban selection and the flat blob are
+// built from observed alone.
+func (j *CheckClientIpJob) processScan(observed map[string]map[string]int64, traffic map[string][]ipTrafficDelta, enforce, observedAreLive bool) bool {
 	shouldCleanLog := false
 	now := time.Now().Unix()
 
@@ -413,7 +433,7 @@ func (j *CheckClientIpJob) processObserved(observed map[string]map[string]int64,
 		j.disconnectClientTemporarily(d.inbound, d.email, clients)
 	}
 
-	j.recordLocalAttribution(attribution)
+	j.recordLocalAttribution(addTrafficToAttribution(attribution, traffic))
 
 	return shouldCleanLog
 }

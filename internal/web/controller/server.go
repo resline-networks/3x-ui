@@ -542,7 +542,7 @@ func (a *ServerController) getNewmlkem768(c *gin.Context) {
 }
 
 func (a *ServerController) getClientIps(c *gin.Context) {
-	ips, err := (&service.InboundService{}).GetAllInboundClientIps()
+	ips, err := (&service.InboundService{}).GetAllInboundClientIpsWithTraffic()
 	jsonObj(c, ips, err)
 }
 

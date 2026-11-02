@@ -1367,6 +1367,18 @@ func (s *XrayService) GetXrayTraffic() ([]*xray.Traffic, []*xray.ClientTraffic, 
 // core as unsupported until the next restart, while transient errors leave the
 // capability undecided so a flaky poll can't lock in legacy mode.
 func (s *XrayService) GetOnlineUsers() ([]xray.OnlineUser, bool, error) {
+	return s.queryOnlineUsers((*xray.XrayAPI).GetOnlineUsers)
+}
+
+// GetUsersIPTraffic is GetOnlineUsers that also returns each user's offline
+// IPs (OnlineUser.OfflineIPs), whose byte counters the resline core keeps after
+// the last connection closes. Only byte accounting may read OfflineIPs; online
+// state and the IP limit read IPs alone.
+func (s *XrayService) GetUsersIPTraffic() ([]xray.OnlineUser, bool, error) {
+	return s.queryOnlineUsers((*xray.XrayAPI).GetUsersIPTraffic)
+}
+
+func (s *XrayService) queryOnlineUsers(query func(*xray.XrayAPI) ([]xray.OnlineUser, error)) ([]xray.OnlineUser, bool, error) {
 	process := currentXrayProcess()
 	if process == nil || !process.IsRunning() {
 		return nil, false, nil
@@ -1380,7 +1392,7 @@ func (s *XrayService) GetOnlineUsers() ([]xray.OnlineUser, bool, error) {
 	}
 	defer s.xrayAPI.Close()
 
-	users, err := s.xrayAPI.GetOnlineUsers()
+	users, err := query(&s.xrayAPI)
 	if err != nil {
 		if xray.IsUnimplementedErr(err) {
 			process.SetOnlineAPISupport(xray.OnlineAPIUnsupported)
