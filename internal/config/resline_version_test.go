@@ -7,9 +7,8 @@ import (
 	versionutil "github.com/mhsanaei/3x-ui/v3/internal/util/version"
 )
 
-// `x-ui -v` prints the embedded version. The resline fork's drift check
-// treats a panel without the resline marker as a plain upstream install, so
-// the embedded version must carry the marker and still parse as a version.
+// The drift check treats a panel whose `x-ui -v` lacks the resline marker as upstream,
+// so the embedded version must carry the marker and still parse as a version.
 func TestBaseVersionCarriesReslineMarker(t *testing.T) {
 	v := GetBaseVersion()
 	if !strings.Contains(v, versionutil.ReslineSuffix) {

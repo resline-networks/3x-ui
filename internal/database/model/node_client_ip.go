@@ -6,14 +6,8 @@ import (
 	"slices"
 )
 
-// ClientIpEntry records an observed client IP and its last-seen Unix timestamp.
-//
-// Uplink/Downlink are the bytes counted for this (client, IP[, node]) entry
-// since it was created, accumulated from the resline xray core's per-IP
-// counters. They only ever appear on attribution entries (NodeClientIp) and in
-// API responses; the flat InboundClientIps blob that drives the IP limit never
-// stores them. nil means "not counted" (an upstream core or an older node),
-// which is not the same as zero.
+// ClientIpEntry records an observed client IP and its last-seen Unix timestamp. Uplink/Downlink are
+// bytes since the entry was created, never in the flat IP-limit blob; nil = not counted, not zero.
 type ClientIpEntry struct {
 	IP        string `json:"ip"`
 	Timestamp int64  `json:"timestamp"`

@@ -18,14 +18,8 @@ type ipTrafficKey struct{ email, ip string }
 
 type ipCounters struct{ up, down int64 }
 
-// ipTrafficMeter turns the core's cumulative per-(client, IP) byte counters
-// into per-scan deltas, the same way GetTraffic treats the per-client counters:
-// the first scan of a panel process only records baselines (the counters may
-// hold traffic already accounted before a panel restart); after that an entry
-// the meter has not seen counts from zero, and a counter that moved backwards
-// means the core restarted or recreated the entry, so its new value is all new
-// traffic. Baselines are kept only for entries the core still reports, so a
-// recycled entry starts over and the map stays bounded by the core's own.
+// ipTrafficMeter turns cumulative per-(client, IP) counters into per-scan deltas like GetTraffic: first scan
+// = baseline, unseen entry or backwards counter = all new; baselines kept only for entries the core reports.
 type ipTrafficMeter struct {
 	last   map[ipTrafficKey]ipCounters
 	primed bool
@@ -67,12 +61,8 @@ func (m *ipTrafficMeter) measure(users []xray.OnlineUser) map[string][]ipTraffic
 	return out
 }
 
-// addTrafficToAttribution puts this scan's deltas on the attribution entries.
-// A live IP's entry carries its delta even when it is zero (counted, nothing
-// moved), so the stored total exists as zero rather than missing. An IP without
-// a live entry this scan — its connections closed since the previous scan —
-// only gets an entry when it moved bytes, stamped with the core's last dispatch
-// so presence is never invented for it.
+// addTrafficToAttribution adds deltas to attribution entries; a live IP gets its delta even at zero.
+// An IP with no live entry is only added when it moved bytes, stamped with the core's last dispatch.
 func addTrafficToAttribution(attribution map[string][]model.ClientIpEntry, traffic map[string][]ipTrafficDelta) map[string][]model.ClientIpEntry {
 	if len(traffic) == 0 {
 		return attribution

@@ -1,9 +1,5 @@
-// Mirror of web/service/panel.go isNewerVersion: parse a vMAJOR.MINOR.PATCH tag,
-// optionally with the resline fork's -resline.N suffix, and report whether
-// `latest` is ahead of `current`. A plain upstream version counts as resline.0
-// of its base. When either side isn't such a tag, fall back to a normalized
-// string inequality — the same heuristic the Go side uses so the node "update
-// available" badge agrees with what the server would decide.
+// Mirror of web/service/panel.go isNewerVersion: vMAJOR.MINOR.PATCH[-resline.N], plain upstream = resline.0.
+// Non-tags fall back to normalized string inequality like the Go side, so the node badge matches the server.
 const RESLINE_SUFFIX = '-resline.';
 
 function parseVersionParts(version: string): [number, number, number, number] | null {

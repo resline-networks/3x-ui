@@ -35,9 +35,8 @@ func Normalize(v string) string {
 // release counter: v3.11.0-resline.2 is the fork's second release on v3.11.0.
 const ReslineSuffix = "-resline."
 
-// parse reads MAJOR.MINOR.PATCH with an optional -resline.N suffix. A plain
-// upstream version is resline.0 of its base, so it sorts just below the fork's
-// first release of the same base. Any other suffix is rejected.
+// parse reads MAJOR.MINOR.PATCH[-resline.N]; plain upstream is resline.0 of its base, so it sorts
+// just below the fork's first release of that base. Any other suffix is rejected.
 func parse(v string) ([4]int, bool) {
 	var result [4]int
 	base := Normalize(v)

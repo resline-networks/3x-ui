@@ -70,11 +70,8 @@ func wantBytes(t *testing.T, label string, got map[string]reportedBytes, ip stri
 	}
 }
 
-// The core reports cumulative counters; the panel stores what moved. The first
-// scan of a panel process only takes a baseline (like GetTraffic: the counters
-// may already hold traffic recorded before a panel restart), later scans add
-// the difference, and a counter that went backwards means the core restarted
-// or recreated the entry, so its new value is all new traffic.
+// Cumulative core counters become stored deltas: the first scan of a panel process is a baseline (like
+// GetTraffic), later scans add the difference, and a backwards counter is all new traffic.
 func TestIPTraffic_CumulativeCountersBecomeAccumulatedDeltas(t *testing.T) {
 	setupIntegrationDB(t)
 	t.Setenv("XUI_ENABLE_FAIL2BAN", "false")
@@ -103,11 +100,8 @@ func TestIPTraffic_CumulativeCountersBecomeAccumulatedDeltas(t *testing.T) {
 	wantBytes(t, "after restart, next scan", reportedTraffic(t, email), ip, 750, 4400)
 }
 
-// A connection that closed since the previous scan leaves its IP in the core's
-// offline list. Its last bytes are still counted, and a user whose only
-// connection opened and closed between two scans gets an entry too — but
-// neither becomes an observation: the flat blob (the IP-limit input) only
-// ever holds live IPs.
+// An IP closed since the last scan sits in the core's offline list: its bytes count (even for a user
+// whose only connection opened and closed between scans) but it never becomes an observation.
 func TestIPTraffic_OfflineIPsCountBytesButNeverObservations(t *testing.T) {
 	setupIntegrationDB(t)
 	t.Setenv("XUI_ENABLE_FAIL2BAN", "false")
@@ -123,9 +117,11 @@ func TestIPTraffic_OfflineIPsCountBytesButNeverObservations(t *testing.T) {
 			counted("203.0.113.21", now-20, 10, 10),
 		}}},
 		{
-			{Email: alice,
+			{
+				Email:      alice,
 				IPs:        []xray.OnlineIP{counted("203.0.113.21", now-20, 15, 20)},
-				OfflineIPs: []xray.OnlineIP{counted("203.0.113.20", now-30, 300, 500)}},
+				OfflineIPs: []xray.OnlineIP{counted("203.0.113.20", now-30, 300, 500)},
+			},
 			// bob connected and left between the two scans.
 			{Email: bob, OfflineIPs: []xray.OnlineIP{counted("198.51.100.30", now-5, 40, 4000)}},
 		},
@@ -226,11 +222,8 @@ func stripBytes(rounds [][]xray.OnlineUser) [][]xray.OnlineUser {
 	return out
 }
 
-// LimitIP / fail2ban must decide exactly as before (2026-08-17 had a limitIp
-// mis-ban): the same connections with per-IP bytes and offline IPs produce the
-// same ban lines and the same flat blob as without them. The sequence has an
-// over-limit pair (old IP banned once, newest kept) and a recently closed IP
-// that must not count toward the limit.
+// LimitIP / fail2ban decide exactly as before (2026-08-17 mis-ban): an over-limit pair and a just-closed
+// IP give the same ban lines and flat blob with or without per-IP bytes and offline IPs.
 func TestIPTraffic_LimitIPDecisionsUnchangedByBytesAndOfflineIPs(t *testing.T) {
 	now := time.Now().Unix()
 	oldDispatch, newDispatch := now-3600, now-10
@@ -239,18 +232,22 @@ func TestIPTraffic_LimitIPDecisionsUnchangedByBytesAndOfflineIPs(t *testing.T) {
 			counted("198.51.100.1", oldDispatch, 10, 10),
 			counted("198.51.100.2", newDispatch, 10, 10),
 		}}},
-		{{Email: "limit-bytes",
+		{{
+			Email: "limit-bytes",
 			IPs: []xray.OnlineIP{
 				counted("198.51.100.1", oldDispatch, 20, 20),
 				counted("198.51.100.2", newDispatch, 20, 20),
 			},
-			OfflineIPs: []xray.OnlineIP{counted("198.51.100.3", now-5, 7, 7)}}},
-		{{Email: "limit-bytes",
+			OfflineIPs: []xray.OnlineIP{counted("198.51.100.3", now-5, 7, 7)},
+		}},
+		{{
+			Email: "limit-bytes",
 			IPs: []xray.OnlineIP{
 				counted("198.51.100.1", oldDispatch, 30, 30),
 				counted("198.51.100.2", newDispatch, 30, 30),
 			},
-			OfflineIPs: []xray.OnlineIP{counted("198.51.100.3", now-5, 9, 9)}}},
+			OfflineIPs: []xray.OnlineIP{counted("198.51.100.3", now-5, 9, 9)},
+		}},
 	}
 
 	withBytes := runBanSequence(t, rounds, "limit-bytes", 1)
@@ -280,12 +277,16 @@ func TestIPTraffic_LimitIPDecisionsUnchangedByBytesAndOfflineIPs(t *testing.T) {
 func TestIPTraffic_OfflineIPDoesNotCountTowardLimit(t *testing.T) {
 	now := time.Now().Unix()
 	got := runBanSequence(t, [][]xray.OnlineUser{
-		{{Email: "limit-offline",
+		{{
+			Email:      "limit-offline",
 			IPs:        []xray.OnlineIP{counted("192.0.2.1", now-10, 1, 1)},
-			OfflineIPs: []xray.OnlineIP{counted("192.0.2.2", now-2, 1, 1)}}},
-		{{Email: "limit-offline",
+			OfflineIPs: []xray.OnlineIP{counted("192.0.2.2", now-2, 1, 1)},
+		}},
+		{{
+			Email:      "limit-offline",
 			IPs:        []xray.OnlineIP{counted("192.0.2.1", now-10, 2, 2)},
-			OfflineIPs: []xray.OnlineIP{counted("192.0.2.2", now-2, 5, 5)}}},
+			OfflineIPs: []xray.OnlineIP{counted("192.0.2.2", now-2, 5, 5)},
+		}},
 	}, "limit-offline", 1)
 	if len(got.banLines) != 0 {
 		t.Fatalf("an offline IP must not trigger a ban, got %q", got.banLines)

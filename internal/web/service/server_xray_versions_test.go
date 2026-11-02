@@ -5,9 +5,8 @@ import (
 	"testing"
 )
 
-// "Switch Xray version" lists the xray fork's releases. Only resline builds of
-// a supported base are offered: a plain upstream tag (should one ever be
-// published in the fork) would install an xray without the fork's changes.
+// "Switch Xray version" offers only resline builds of a supported base: a plain upstream tag in the
+// fork would install an xray without the fork's changes.
 func TestFilterXrayVersions(t *testing.T) {
 	releases := []Release{
 		{TagName: "v26.10.21-resline.2", Prerelease: true},

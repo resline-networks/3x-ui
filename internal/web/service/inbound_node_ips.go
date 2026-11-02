@@ -18,14 +18,8 @@ import (
 // observations under its panelGuid, and the master merges every node's
 // guid-keyed report — never mixing in IPs a parent pushed down.
 
-// Attribution excludes empty addresses and keeps each fresh IP's maximum
-// timestamp. With addBytes, incoming byte counters are this panel's per-scan
-// deltas and are added to the stored ones; without it they are a node's own
-// cumulative totals and replace them (a lower value is that node's reset
-// passed through). An incoming entry without counters
-// leaves the stored ones alone. An incoming entry that is already past the
-// cutoff (an offline IP whose last dispatch is old) cannot create or refresh an
-// entry, but its bytes still land on an entry that is fresh.
+// Attribution drops empty addresses, keeps each fresh IP's max timestamp; addBytes adds per-scan deltas,
+// else node totals replace them (no counters: kept). A past-cutoff entry only adds bytes to a fresh one.
 func mergeModelClientIpEntries(old, incoming []model.ClientIpEntry, cutoff int64, addBytes bool) []model.ClientIpEntry {
 	byIP := make(map[string]model.ClientIpEntry, len(old)+len(incoming))
 	for _, e := range old {
@@ -147,8 +141,7 @@ func upsertNodeClientIps(guid string, perEmail map[string][]model.ClientIpEntry,
 }
 
 // RecordLocalClientIps stores the scanner's local observations under this panel's
-// GUID. Byte counters on the entries are this scan's deltas and are added to the
-// stored totals.
+// GUID; byte counters on the entries are this scan's deltas, added to the stored totals.
 func (s *InboundService) RecordLocalClientIps(panelGuid string, observed map[string][]model.ClientIpEntry) error {
 	return upsertNodeClientIps(panelGuid, observed, true)
 }
@@ -216,13 +209,8 @@ func (s *InboundService) GetClientIpsByGuid() (map[string]map[string][]model.Cli
 	return out, nil
 }
 
-// GetAllInboundClientIpsWithTraffic is GetAllInboundClientIps as the clientIps
-// API serves it: every IP entry also carries the bytes counted for that client
-// and IP, summed over every attribution subtree this panel holds (its own scans
-// plus each node's reports). Only the response carries them; the stored flat
-// blob, which drives the IP limit, is never rewritten. An IP no subtree counted
-// carries no bytes. Note the sum can step down when one node's entry ages out
-// while another's continues; per-node values are in clientIpsByGuid.
+// GetAllInboundClientIpsWithTraffic adds to each IP the bytes summed over every attribution subtree; the
+// stored flat blob is never rewritten. The sum can step down when one node's entry ages out.
 func (s *InboundService) GetAllInboundClientIpsWithTraffic() ([]model.InboundClientIps, error) {
 	rows, err := s.GetAllInboundClientIps()
 	if err != nil || len(rows) == 0 {

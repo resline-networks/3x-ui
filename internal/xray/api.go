@@ -926,10 +926,8 @@ func (x *XrayAPI) GetTraffic() ([]*Traffic, []*ClientTraffic, error) {
 	return mapToSlice(tagTrafficMap), mapToSlice(emailTrafficMap), nil
 }
 
-// OnlineIP is one source address of a live connection, with the unix time (seconds)
-// the core last dispatched a link from it. Uplink/Downlink are the bytes the
-// resline xray fork counted for this (user, IP) entry since it was created; nil
-// means the core did not report them (an upstream core), which is not zero.
+// OnlineIP is one source address of a live connection, with the unix time (seconds) the core last
+// dispatched a link from it. Uplink/Downlink: resline-core bytes since creation; nil = not reported.
 type OnlineIP struct {
 	IP       string `json:"ip"`
 	LastSeen int64  `json:"lastSeen"`
@@ -937,11 +935,8 @@ type OnlineIP struct {
 	Downlink *int64 `json:"downlink,omitempty"`
 }
 
-// OnlineUser is a client email with at least one live connection and the source
-// IPs of those connections, as tracked by Xray's statsUserOnline policy.
-// OfflineIPs is filled only by GetUsersIPTraffic: addresses whose connections
-// all closed but whose byte counters the core still keeps. They are not live
-// and must never count toward online state or the IP limit.
+// OnlineUser is a client email with live connections and their source IPs (statsUserOnline policy).
+// OfflineIPs (GetUsersIPTraffic only) are closed but still metered: never online, never IP-limit input.
 type OnlineUser struct {
 	Email      string     `json:"email"`
 	IPs        []OnlineIP `json:"ips"`
@@ -955,9 +950,8 @@ func (x *XrayAPI) GetOnlineUsers() ([]OnlineUser, error) {
 	return x.getUsersStats(false)
 }
 
-// GetUsersIPTraffic is GetOnlineUsers plus each user's offline IPs, so the bytes
-// of a connection that opened and closed between two polls are not lost. A user
-// may come back with only OfflineIPs: that user is not online.
+// GetUsersIPTraffic is GetOnlineUsers plus offline IPs, so bytes of a connection that opened and
+// closed between polls are not lost. A user may come back with only OfflineIPs: not online.
 func (x *XrayAPI) GetUsersIPTraffic() ([]OnlineUser, error) {
 	return x.getUsersStats(true)
 }

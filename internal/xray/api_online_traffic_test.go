@@ -55,9 +55,8 @@ func startFakeUsersStats(t *testing.T, resp *statsService.GetUsersStatsResponse)
 
 func i64(v int64) *int64 { return &v }
 
-// The resline xray reports, per (user, source IP), the bytes moved since the
-// entry was created, and keeps recently closed IPs in offline_ips. An upstream
-// core sends neither field.
+// The resline xray reports per-(user, source IP) bytes since creation and keeps recently closed IPs in
+// offline_ips; an upstream core sends neither field.
 func ipTrafficResponse() *statsService.GetUsersStatsResponse {
 	return &statsService.GetUsersStatsResponse{Users: []*statsService.UserStat{
 		{

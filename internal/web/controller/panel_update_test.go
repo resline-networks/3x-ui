@@ -168,9 +168,8 @@ func postPanelUpdateForm(t *testing.T, engine *gin.Engine, path string, form url
 	return env
 }
 
-// The resline fork publishes no dev builds, so a request for the dev channel
-// (from an old master node or a stale UI) is refused before anything launches,
-// on every platform, with an error that says why.
+// The fork publishes no dev builds: a dev-channel request (old master, stale UI) is refused
+// before anything launches, on every platform, with an error that says why.
 func TestUpdatePanel_DevChannelRefused(t *testing.T) {
 	newHostTestDB(t)
 	engine := newPanelUpdateTestEngine()

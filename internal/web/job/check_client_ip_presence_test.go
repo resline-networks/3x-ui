@@ -32,9 +32,8 @@ func reportedByGuid(t *testing.T, email string) map[string]int64 {
 	return out
 }
 
-// An idle long connection keeps its IP in xray's OnlineMap with the lastSeen of
-// the dispatch that opened it, an hour ago. While it stays open, every scan
-// must report the IP as present at scan time.
+// An idle long connection keeps xray's OnlineMap lastSeen at the dispatch an hour ago; while it
+// stays open, every scan must report the IP as present at scan time.
 func TestPresence_IdleLongConnectionReportedAtScanTime(t *testing.T) {
 	setupIntegrationDB(t)
 	t.Setenv("XUI_ENABLE_FAIL2BAN", "false")
@@ -57,9 +56,8 @@ func TestPresence_IdleLongConnectionReportedAtScanTime(t *testing.T) {
 	}
 }
 
-// A long connection that keeps moving data looks exactly the same to the scan:
-// OnlineMap.lastSeen only moves on a new dispatch, never on traffic. Several
-// scans in a row must each report it at scan time.
+// A busy long connection looks the same: OnlineMap.lastSeen moves on a new dispatch, not on traffic,
+// so each of several scans in a row must report it at scan time.
 func TestPresence_BusyLongConnectionReportedOnEveryScan(t *testing.T) {
 	setupIntegrationDB(t)
 	t.Setenv("XUI_ENABLE_FAIL2BAN", "false")
@@ -120,11 +118,8 @@ func TestPresence_ClosedConnectionKeptForGraceWindowThenDropped(t *testing.T) {
 	}
 }
 
-// LimitIP / fail2ban must keep deciding on dispatch time, never on presence.
-// Sequence: limit 1; an idle long connection opened an hour ago plus a new
-// connection from a second IP, over three scans. Expected (last IP wins, a
-// frozen dispatch time is published once): the old IP is banned exactly once,
-// the new one is kept, and the flat clientIps blob still carries dispatch time.
+// LimitIP / fail2ban decide on dispatch time, never presence: limit 1, an hour-old idle connection
+// plus a new IP over three scans bans the old IP exactly once and the flat blob keeps dispatch time.
 func TestPresence_BanOutcomeFollowsDispatchTimeNotPresence(t *testing.T) {
 	setupIntegrationDB(t)
 	t.Setenv("XUI_ENABLE_FAIL2BAN", "true")
@@ -173,9 +168,8 @@ func TestPresence_BanOutcomeFollowsDispatchTimeNotPresence(t *testing.T) {
 	}
 }
 
-// The cluster-wide count reads only the flat blob. A remote IP whose last
-// dispatch is ten minutes old is historical there, even when attribution
-// reports it present right now; counting it would ban the local live IP.
+// The cluster-wide count reads only the flat blob: a remote IP dispatched ten minutes ago is
+// historical there even when attribution says present; counting it would ban the local live IP.
 func TestPresence_FreshAttributionDoesNotCountTowardLimit(t *testing.T) {
 	setupIntegrationDB(t)
 	t.Setenv("XUI_ENABLE_FAIL2BAN", "true")

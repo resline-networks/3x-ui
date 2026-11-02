@@ -25,8 +25,7 @@ import (
 )
 
 // onlineUsersSource is the one service.XrayService method the scan needs, so
-// tests can drive Run end to end without a live xray core. Users carry their
-// offline IPs too (OnlineUser.OfflineIPs); only byte accounting reads those.
+// tests can drive Run end to end without a live xray core.
 type onlineUsersSource interface {
 	GetOnlineUsers() ([]xray.OnlineUser, bool, error)
 }
@@ -121,12 +120,8 @@ func (j *CheckClientIpJob) resolveEnforce(f2bEnabled, hasLimit, f2bInstalled, ne
 	return hasLimit
 }
 
-// collectFromOnlineAPI builds per-email IP observations (email -> ip ->
-// last-seen unix seconds) from the core's online-stats API, plus this scan's
-// per-IP byte deltas. Observations come from live IPs only, exactly as before;
-// offline IPs feed the byte meter alone. ok=false means the API is unavailable
-// — xray not running, an older core, or a transient gRPC failure — and the
-// caller skips the run (there is no access-log fallback).
+// collectFromOnlineAPI returns live-IP observations (email -> ip -> last seen) and per-IP byte
+// deltas; offline IPs feed only the meter. ok=false: API unavailable, the caller skips the run.
 func (j *CheckClientIpJob) collectFromOnlineAPI() (map[string]map[string]int64, map[string][]ipTrafficDelta, bool) {
 	onlineUsers, ok, err := j.onlineUsers.GetOnlineUsers()
 	if err != nil {
@@ -307,9 +302,8 @@ func (j *CheckClientIpJob) processObserved(observed map[string]map[string]int64,
 	return j.processScan(observed, nil, enforce, observedAreLive)
 }
 
-// processScan is processObserved plus this scan's per-IP byte deltas, which
-// only ever reach the attribution rows: ban selection and the flat blob are
-// built from observed alone.
+// processScan is processObserved plus per-IP byte deltas, which only reach the attribution rows:
+// ban selection and the flat blob are built from observed alone.
 func (j *CheckClientIpJob) processScan(observed map[string]map[string]int64, traffic map[string][]ipTrafficDelta, enforce, observedAreLive bool) bool {
 	shouldCleanLog := false
 	now := time.Now().Unix()

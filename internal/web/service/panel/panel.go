@@ -28,9 +28,8 @@ import (
 // It handles panel restart, updates, and system-level panel controls.
 type PanelService struct{}
 
-// PanelUpdateInfo contains the current and latest available panel versions.
-// Channel is always "stable": the resline fork has no dev channel. The commit
-// fields stay in the payload for API compatibility and are always empty.
+// PanelUpdateInfo contains the current and latest available panel versions. Channel is always
+// "stable" (the fork has no dev channel); the commit fields stay, always empty, for API compatibility.
 type PanelUpdateInfo struct {
 	Channel         string `json:"channel"`
 	CurrentVersion  string `json:"currentVersion"`
@@ -140,9 +139,8 @@ func (s *PanelService) GetUpdateInfo() (*PanelUpdateInfo, error) {
 	}, nil
 }
 
-// StartUpdate starts the updater against the latest release. Returns the run
-// ID to pass to GetUpdateStatus so the caller can tell this run's result apart
-// from a stale one.
+// StartUpdate starts the updater against the latest release and returns the run ID that lets
+// GetUpdateStatus tell this run's result apart from a stale one.
 func (s *PanelService) StartUpdate() (int64, error) {
 	return s.startUpdate()
 }

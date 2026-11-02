@@ -65,10 +65,8 @@ func TestIPTraffic_LocalDeltasAccumulate(t *testing.T) {
 	assertEntryBytes(t, "after uncounted scan", byGuidEntry(t, "guid-self", "u@x", "1.1.1.1"), 350, 700)
 }
 
-// A node reports its own cumulative totals each sync: the master stores them as
-// they are (no adding up of repeated reports), a lower value is the node's own
-// reset passed through, and a node that sends no bytes (an older version)
-// leaves the stored totals alone.
+// A node reports cumulative totals each sync: the master stores them as-is (repeats do not add up),
+// a lower value is the node reset passed through, and a report without bytes leaves totals alone.
 func TestIPTraffic_NodeReportReplacesTotals(t *testing.T) {
 	setupClientIpTestDB(t)
 	now := time.Now().Unix()
@@ -93,9 +91,8 @@ func TestIPTraffic_NodeReportReplacesTotals(t *testing.T) {
 	assertEntryBytes(t, "report without bytes", byGuidEntry(t, "guid-node", "u@x", "2.2.2.2"), 40, 60)
 }
 
-// GET /panel/api/server/clientIps is the cluster-wide view: each IP carries the
-// sum of every node's (and this panel's) bytes for that client and IP. An IP no
-// node counted carries no bytes. The stored blob itself never holds bytes.
+// GET /server/clientIps sums every node's (and this panel's) bytes per client and IP; an IP no node
+// counted carries no bytes, and the stored blob itself never holds bytes.
 func TestIPTraffic_FlatViewSumsNodesAndStoresNoBytes(t *testing.T) {
 	setupClientIpTestDB(t)
 	now := time.Now().Unix()

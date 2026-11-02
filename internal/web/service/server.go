@@ -969,9 +969,8 @@ func (s *ServerService) GetXrayVersions() ([]string, error) {
 // minXrayVersion is the oldest xray the panel can drive.
 const minXrayVersion = "26.6.27"
 
-// filterXrayVersions keeps the releases "Switch Xray version" may install:
-// resline builds (vX.Y.Z-resline.N) at or above minXrayVersion, in the order
-// GitHub listed them.
+// filterXrayVersions keeps the releases "Switch Xray version" may install: resline builds
+// (vX.Y.Z-resline.N) at or above minXrayVersion, in the order GitHub listed them.
 func filterXrayVersions(releases []Release) []string {
 	var versions []string
 	for _, release := range releases {

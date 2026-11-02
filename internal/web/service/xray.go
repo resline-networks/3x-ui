@@ -1370,10 +1370,8 @@ func (s *XrayService) GetOnlineUsers() ([]xray.OnlineUser, bool, error) {
 	return s.queryOnlineUsers((*xray.XrayAPI).GetOnlineUsers)
 }
 
-// GetUsersIPTraffic is GetOnlineUsers that also returns each user's offline
-// IPs (OnlineUser.OfflineIPs), whose byte counters the resline core keeps after
-// the last connection closes. Only byte accounting may read OfflineIPs; online
-// state and the IP limit read IPs alone.
+// GetUsersIPTraffic is GetOnlineUsers plus each user's offline IPs (OnlineUser.OfflineIPs), which
+// only byte accounting may read; online state and the IP limit read IPs alone.
 func (s *XrayService) GetUsersIPTraffic() ([]xray.OnlineUser, bool, error) {
 	return s.queryOnlineUsers((*xray.XrayAPI).GetUsersIPTraffic)
 }

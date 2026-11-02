@@ -11,9 +11,8 @@ func TestCompareRejectsUnexpectedFormats(t *testing.T) {
 	}
 }
 
-// The resline fork tags its releases <upstream>-resline.<n>. A plain upstream
-// version counts as resline.0 of the same base, so the fork build of a release
-// is newer than the upstream build of it, and a newer upstream base still wins.
+// Fork tags are <upstream>-resline.<n> and plain upstream counts as resline.0: the fork build
+// of a release beats its upstream build, and a newer upstream base still wins.
 func TestCompareResline(t *testing.T) {
 	cases := []struct {
 		a, b string
