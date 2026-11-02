@@ -1,0 +1,42 @@
+name: Resline checks
+
+# Checks that only the resline fork needs. Kept in its own file so rebasing
+# onto a new upstream tag never conflicts with upstream's workflows.
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  upstream-urls:
+    name: No upstream download addresses
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: .github/resline/check-upstream-urls.sh
+
+  tag-matches-version:
+    name: Tag matches the embedded version
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Compare tag with internal/config/version
+        run: |
+          want="v$(tr -d '[:space:]' < internal/config/version)"
+          echo "tag=${GITHUB_REF_NAME} embedded=${want}"
+          if [[ "${GITHUB_REF_NAME}" != "${want}" ]]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match the embedded version ${want}; x-ui -v would report the wrong release." >&2
+            exit 1
+          fi
+          if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-resline\.[1-9][0-9]*$ ]]; then
+            echo "Tag ${GITHUB_REF_NAME} is not of the form v<upstream>-resline.<n>." >&2
+            exit 1
+          fi
