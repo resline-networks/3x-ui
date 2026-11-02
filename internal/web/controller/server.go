@@ -243,14 +243,19 @@ func (a *ServerController) getUpdateStatus(c *gin.Context) {
 	jsonObj(c, a.panelService.GetUpdateStatus(), nil)
 }
 
-// setUpdateChannel toggles whether self-update tracks the rolling dev release.
+// setUpdateChannel is kept for API compatibility: the resline build has only
+// the stable channel, so dev=true is refused and dev=false clears an old opt-in.
 func (a *ServerController) setUpdateChannel(c *gin.Context) {
 	dev, err := strconv.ParseBool(c.PostForm("dev"))
 	if err != nil {
 		jsonMsg(c, "invalid data", err)
 		return
 	}
-	err = a.settingService.SetDevChannelEnable(dev)
+	if dev {
+		jsonMsg(c, I18nWeb(c, "pages.index.updateChannelChanged"), panel.ErrDevChannelRemoved)
+		return
+	}
+	err = a.settingService.SetDevChannelEnable(false)
 	jsonMsg(c, I18nWeb(c, "pages.index.updateChannelChanged"), err)
 }
 

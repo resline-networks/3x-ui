@@ -155,24 +155,6 @@ update() {
     fi
 }
 
-update_dev() {
-    confirm "This will update x-ui to the latest DEV commit (the rolling 'dev-latest' build, not a stable release). Your data is preserved. Continue?" "y"
-    if [[ $? != 0 ]]; then
-        LOGE "Cancelled"
-        if [[ $# == 0 ]]; then
-            before_show_menu
-        fi
-        return 0
-    fi
-    # XUI_UPDATE_TAG tells update.sh to install the dev-latest pre-release
-    # instead of the latest stable tag.
-    XUI_UPDATE_TAG="dev-latest" bash <(curl -Ls https://raw.githubusercontent.com/MHSanaei/3x-ui/main/update.sh)
-    if [[ $? == 0 ]]; then
-        LOGI "Dev update is complete, Panel has automatically restarted "
-        before_show_menu
-    fi
-}
-
 replace_xui_script() {
     local url="$1"
     local use_if_modified_since="$2"
@@ -3491,7 +3473,6 @@ show_usage() {
 │  ${blue}x-ui log${plain}                   - Check logs                       │
 │  ${blue}x-ui banlog${plain}                - Check Fail2ban ban logs          │
 │  ${blue}x-ui update${plain}                - Update                           │
-│  ${blue}x-ui update-dev${plain}            - Update to Dev channel (latest)   │
 │  ${blue}x-ui update-all-geofiles${plain}   - Update all geo files             │
 │  ${blue}x-ui migrateDB [file]${plain}      - Convert .db <-> .dump (SQLite)   │
 │  ${blue}x-ui pgclient [ver]${plain}        - Upgrade pg_dump/pg_restore tools │
@@ -3509,7 +3490,6 @@ show_menu() {
 │────────────────────────────────────────────────│
 │  ${green}1.${plain} Install                                   │
 │  ${green}2.${plain} Update                                    │
-│  ${green}3.${plain} Update to Dev Channel (latest commit)     │
 │  ${green}4.${plain} Update Menu                               │
 │  ${green}5.${plain} Legacy Version                            │
 │  ${green}6.${plain} Uninstall                                 │
@@ -3554,9 +3534,6 @@ show_menu() {
             ;;
         2)
             check_install && update
-            ;;
-        3)
-            check_install && update_dev
             ;;
         4)
             check_install && update_menu
@@ -3676,9 +3653,6 @@ if [[ $# -gt 0 ]]; then
             ;;
         "update")
             check_install 0 && update 0
-            ;;
-        "update-dev")
-            check_install 0 && update_dev 0
             ;;
         "legacy")
             check_install 0 && legacy_version 0

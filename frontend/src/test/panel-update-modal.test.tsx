@@ -33,14 +33,11 @@ describe('panel update modal', () => {
       <PanelUpdateModal
         open
         info={{
-          channel: 'dev',
-          currentVersion: 'dev+old',
-          latestVersion: 'dev+new',
-          currentCommit: 'old',
-          latestCommit: 'new',
+          channel: 'stable',
+          currentVersion: '3.11.0-resline.1',
+          latestVersion: 'v3.11.0-resline.2',
           updateAvailable: true,
         }}
-        devChannelEnable
         onClose={onClose}
         onBusy={onBusy}
       />,
@@ -56,7 +53,20 @@ describe('panel update modal', () => {
     expect(HttpUtil.post).toHaveBeenCalledWith('/panel/api/server/updatePanel');
     expect(onBusy).toHaveBeenCalledWith({
       busy: true,
-      tip: 'Installation is in progress, please do not refresh this page (dev+new)',
+      tip: 'Installation is in progress, please do not refresh this page (v3.11.0-resline.2)',
     });
+  });
+
+  // The resline fork ships no dev channel, so the modal offers no switch to it.
+  it('offers no dev channel switch', () => {
+    renderWithProviders(
+      <PanelUpdateModal
+        open
+        info={{ currentVersion: '3.11.0-resline.1', latestVersion: '', updateAvailable: false }}
+        onClose={vi.fn()}
+        onBusy={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole('switch')).toBeNull();
   });
 });

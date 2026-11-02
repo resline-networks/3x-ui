@@ -936,6 +936,9 @@ type NodeUpdateResult struct {
 // enabled, online nodes are eligible — an offline node can't be reached, so it
 // is reported as skipped rather than silently dropped.
 func (s *NodeService) UpdatePanels(ids []int, dev bool) ([]NodeUpdateResult, error) {
+	if dev {
+		return nil, fmt.Errorf("the dev channel is not available in the resline build; only tagged releases are published")
+	}
 	mgr := runtime.GetManager()
 	if mgr == nil {
 		return nil, fmt.Errorf("runtime manager unavailable")

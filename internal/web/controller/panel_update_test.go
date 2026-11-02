@@ -25,6 +25,7 @@ func newPanelUpdateTestEngine() *gin.Engine {
 	engine := gin.New()
 	engine.GET("/panel/api/server/getUpdateStatus", a.getUpdateStatus)
 	engine.POST("/panel/api/server/updatePanel", a.updatePanel)
+	engine.POST("/panel/api/server/setUpdateChannel", a.setUpdateChannel)
 	return engine
 }
 
@@ -148,5 +149,51 @@ func TestUpdatePanel_InvalidDevValueRejectedBeforeLaunch(t *testing.T) {
 	}
 	if len(env.Obj) != 0 && string(env.Obj) != "null" {
 		t.Fatalf("updatePanel error response must not carry an obj/runId: got %s", env.Obj)
+	}
+}
+
+func postPanelUpdateForm(t *testing.T, engine *gin.Engine, path string, form url.Values) hostEnvelope {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	engine.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status %d, body=%s", w.Code, w.Body.String())
+	}
+	var env hostEnvelope
+	if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+		t.Fatalf("decode envelope: %v body=%s", err, w.Body.String())
+	}
+	return env
+}
+
+// The resline fork publishes no dev builds, so a request for the dev channel
+// (from an old master node or a stale UI) is refused before anything launches,
+// on every platform, with an error that says why.
+func TestUpdatePanel_DevChannelRefused(t *testing.T) {
+	newHostTestDB(t)
+	engine := newPanelUpdateTestEngine()
+
+	env := postPanelUpdateForm(t, engine, "/panel/api/server/updatePanel", url.Values{"dev": {"true"}})
+	if env.Success {
+		t.Fatal("updatePanel with dev=true: success = true, want false")
+	}
+	if !strings.Contains(env.Msg, "dev channel") {
+		t.Fatalf("updatePanel with dev=true: msg %q does not explain the dev channel is gone", env.Msg)
+	}
+}
+
+func TestSetUpdateChannel_DevRefused(t *testing.T) {
+	newHostTestDB(t)
+	engine := newPanelUpdateTestEngine()
+
+	env := postPanelUpdateForm(t, engine, "/panel/api/server/setUpdateChannel", url.Values{"dev": {"true"}})
+	if env.Success {
+		t.Fatal("setUpdateChannel dev=true: success = true, want false")
+	}
+	env = postPanelUpdateForm(t, engine, "/panel/api/server/setUpdateChannel", url.Values{"dev": {"false"}})
+	if !env.Success {
+		t.Fatalf("setUpdateChannel dev=false: success = false, msg=%s", env.Msg)
 	}
 }

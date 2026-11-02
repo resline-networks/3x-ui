@@ -493,7 +493,7 @@ require_repo_files() {
     for name in "$@"; do
         status=$(${curl_bin} -sIL --retry 3 --connect-timeout 15 -o /dev/null -w '%{http_code}' "https://raw.githubusercontent.com/MHSanaei/3x-ui/${ref}/${name}")
         if [[ "${status}" != "200" ]]; then
-            _fail "ERROR: ${name} is not available for ${ref} (HTTP ${status}). Update to a release that ships it, or to 'dev-latest'. The current installation is untouched."
+            _fail "ERROR: ${name} is not available for ${ref} (HTTP ${status}). Update to a release that ships it. The current installation is untouched."
         fi
     done
 }
@@ -512,8 +512,8 @@ update_x-ui() {
 
     echo -e "${green}Downloading new x-ui version...${plain}"
 
-    # XUI_UPDATE_TAG lets the panel target a specific release tag (e.g. the
-    # rolling dev-latest pre-release). Empty keeps the default latest-stable flow.
+    # XUI_UPDATE_TAG targets a specific release tag (e.g. a pre-release under
+    # acceptance, or a rollback). Empty keeps the default latest-release flow.
     if [[ -n "${XUI_UPDATE_TAG}" ]]; then
         tag_version="${XUI_UPDATE_TAG}"
         echo -e "${green}Using update tag: ${tag_version}${plain}"
@@ -525,11 +525,8 @@ update_x-ui() {
     fi
     echo -e "Got x-ui latest version: ${tag_version}, beginning the installation..."
     # x-ui.sh, x-ui.rc and the unit files must come from the same release as
-    # the binary; only the rolling dev build tracks main.
+    # the binary.
     script_ref="${tag_version}"
-    if [[ "${tag_version}" == "dev-latest" ]]; then
-        script_ref="main"
-    fi
     # The unit files are only fetched when the release tarball lacks them, so
     # they are checked at that point instead of here.
     local required_files=("x-ui.sh")
