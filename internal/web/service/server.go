@@ -42,6 +42,7 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/netsafe"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/sys"
+	"github.com/mhsanaei/3x-ui/v3/internal/util/version"
 	"github.com/mhsanaei/3x-ui/v3/internal/xray"
 
 	"github.com/google/uuid"
@@ -925,7 +926,7 @@ const (
 
 func (s *ServerService) GetXrayVersions() ([]string, error) {
 	const (
-		XrayURL    = "https://api.github.com/repos/XTLS/Xray-core/releases"
+		XrayURL    = "https://api.github.com/repos/" + config.XrayReleaseRepo + "/releases"
 		bufferSize = 8192
 	)
 
@@ -962,26 +963,26 @@ func (s *ServerService) GetXrayVersions() ([]string, error) {
 		return nil, err
 	}
 
+	return filterXrayVersions(releases), nil
+}
+
+// minXrayVersion is the oldest xray the panel can drive.
+const minXrayVersion = "26.6.27"
+
+// filterXrayVersions keeps the releases "Switch Xray version" may install:
+// resline builds (vX.Y.Z-resline.N) at or above minXrayVersion, in the order
+// GitHub listed them.
+func filterXrayVersions(releases []Release) []string {
 	var versions []string
 	for _, release := range releases {
-		tagVersion := strings.TrimPrefix(release.TagName, "v")
-		tagParts := strings.Split(tagVersion, ".")
-		if len(tagParts) != 3 {
+		if !strings.Contains(release.TagName, version.ReslineSuffix) {
 			continue
 		}
-
-		major, err1 := strconv.Atoi(tagParts[0])
-		minor, err2 := strconv.Atoi(tagParts[1])
-		patch, err3 := strconv.Atoi(tagParts[2])
-		if err1 != nil || err2 != nil || err3 != nil {
-			continue
-		}
-
-		if major > 26 || (major == 26 && minor > 6) || (major == 26 && minor == 6 && patch >= 27) {
+		if cmp, ok := version.Compare(release.TagName, minXrayVersion); ok && cmp >= 0 {
 			versions = append(versions, release.TagName)
 		}
 	}
-	return versions, nil
+	return versions
 }
 
 func (s *ServerService) StopXrayService() error {
@@ -1031,7 +1032,7 @@ func (s *ServerService) downloadXRay(version string) (string, error) {
 	}
 
 	fileName := fmt.Sprintf("Xray-%s-%s.zip", osName, arch)
-	url := fmt.Sprintf("https://github.com/XTLS/Xray-core/releases/download/%s/%s", version, fileName)
+	url := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s", config.XrayReleaseRepo, version, fileName)
 	client := s.settingService.NewProxiedHTTPClient(60 * time.Second)
 	req, reqErr := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
 	if reqErr != nil {
@@ -1096,8 +1097,8 @@ func (s *ServerService) downloadXRay(version string) (string, error) {
 	return path, nil
 }
 
-// fetchXrayDigestSHA256 downloads the .dgst sidecar XTLS publishes next to each
-// release asset and returns the SHA2-256 hex digest it lists.
+// fetchXrayDigestSHA256 downloads the .dgst sidecar the xray release workflow
+// publishes next to each release asset and returns the SHA2-256 hex digest it lists.
 func (s *ServerService) fetchXrayDigestSHA256(client *http.Client, dgstURL string) (string, error) {
 	req, reqErr := http.NewRequestWithContext(context.Background(), http.MethodGet, dgstURL, nil)
 	if reqErr != nil {
