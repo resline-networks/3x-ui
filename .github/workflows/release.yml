@@ -115,11 +115,16 @@ jobs:
           cd x-ui/bin
 
           # Download dependencies
-          Xray_URL="https://github.com/XTLS/Xray-core/releases/download/v26.10.21/"
+          Xray_URL="https://github.com/resline-networks/Xray-core/releases/download/v26.10.21-resline.1/"
           if [ "${{ matrix.platform }}" == "amd64" ]; then
             fetch ${Xray_URL}Xray-linux-64.zip
             unzip Xray-linux-64.zip
             rm -f Xray-linux-64.zip
+            # The runner is amd64, so this build can prove the bundled xray is
+            # the resline fork's (the marker sits outside the version field).
+            XRAY_VERSION_OUT=$(./xray version)
+            echo "${XRAY_VERSION_OUT}"
+            [[ "${XRAY_VERSION_OUT%%$'\n'*}" == *resline* ]] || { echo "bundled xray is not a resline build" >&2; exit 1; }
           elif [ "${{ matrix.platform }}" == "arm64" ]; then
             fetch ${Xray_URL}Xray-linux-arm64-v8a.zip
             unzip Xray-linux-arm64-v8a.zip
@@ -285,7 +290,7 @@ jobs:
           cd x-ui\bin
 
           # Download Xray for Windows
-          $Xray_URL = "https://github.com/XTLS/Xray-core/releases/download/v26.10.21/"
+          $Xray_URL = "https://github.com/resline-networks/Xray-core/releases/download/v26.10.21-resline.1/"
           Invoke-WebRequest @retry -Uri "${Xray_URL}Xray-windows-64.zip" -OutFile "Xray-windows-64.zip"
           Expand-Archive -Path "Xray-windows-64.zip" -DestinationPath .
           Remove-Item "Xray-windows-64.zip"
