@@ -115,7 +115,7 @@ jobs:
           cd x-ui/bin
 
           # Download dependencies
-          Xray_URL="https://github.com/resline-networks/Xray-core/releases/download/v26.10.21-resline.1/"
+          Xray_URL="https://github.com/resline-networks/Xray-core/releases/download/v26.10.21-resline.2/"
           if [ "${{ matrix.platform }}" == "amd64" ]; then
             fetch ${Xray_URL}Xray-linux-64.zip
             unzip Xray-linux-64.zip
@@ -290,7 +290,7 @@ jobs:
           cd x-ui\bin
 
           # Download Xray for Windows
-          $Xray_URL = "https://github.com/resline-networks/Xray-core/releases/download/v26.10.21-resline.1/"
+          $Xray_URL = "https://github.com/resline-networks/Xray-core/releases/download/v26.10.21-resline.2/"
           Invoke-WebRequest @retry -Uri "${Xray_URL}Xray-windows-64.zip" -OutFile "Xray-windows-64.zip"
           Expand-Archive -Path "Xray-windows-64.zip" -DestinationPath .
           Remove-Item "Xray-windows-64.zip"

@@ -120,4 +120,7 @@ require (
 	lukechampine.com/blake3 v1.4.1 // indirect
 )
 
+// resline xray fork at tag v26.10.21-resline.2 (commit 2beb701). Go cannot name the
+// tag itself: a v26 version needs a /v26 module path, so the tag commit is pinned
+// by its pseudo-version, the same way upstream pins its xray tags.
 replace github.com/xtls/xray-core => github.com/resline-networks/Xray-core v1.260327.1-0.20261102131357-2beb701d482f
