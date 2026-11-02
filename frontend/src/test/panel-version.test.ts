@@ -31,6 +31,20 @@ describe('isPanelUpdateAvailable', () => {
     expect(isPanelUpdateAvailable('nightly-1', 'nightly-1')).toBe(false);
   });
 
+  it('orders resline fork releases by base, then by the fork counter', () => {
+    expect(isPanelUpdateAvailable('v3.11.0-resline.2', '3.11.0-resline.1')).toBe(true);
+    expect(isPanelUpdateAvailable('v3.11.0-resline.10', '3.11.0-resline.9')).toBe(true);
+    expect(isPanelUpdateAvailable('v3.11.0-resline.1', '3.11.0-resline.1')).toBe(false);
+    expect(isPanelUpdateAvailable('v3.11.0-resline.1', '3.11.0-resline.2')).toBe(false);
+    expect(isPanelUpdateAvailable('v3.12.0-resline.1', '3.11.0-resline.4')).toBe(true);
+    expect(isPanelUpdateAvailable('v3.11.0-resline.3', '3.12.0-resline.1')).toBe(false);
+  });
+
+  it('puts plain upstream just below the fork build of the same base', () => {
+    expect(isPanelUpdateAvailable('v3.11.0-resline.1', '3.11.0')).toBe(true);
+    expect(isPanelUpdateAvailable('v3.11.0', '3.11.0-resline.1')).toBe(false);
+  });
+
   it('compares dev builds by commit and never across channels', () => {
     expect(isPanelUpdateAvailable('dev+1a2b3c4d', 'dev+0f0f0f0f')).toBe(true);
     expect(isPanelUpdateAvailable('dev+1a2b3c4d', 'dev+1a2b3c4d')).toBe(false);

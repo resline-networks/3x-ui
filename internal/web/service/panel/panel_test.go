@@ -24,6 +24,15 @@ func TestIsNewerVersion(t *testing.T) {
 		{"v2.9.3", "2.9.3", false},
 		{"v2.9.2", "2.9.3", false},
 		{"v3.0.0", "2.9.3", true},
+		// resline fork releases: the fork's own counter decides within a base.
+		{"v3.11.0-resline.2", "3.11.0-resline.1", true},
+		{"v3.11.0-resline.1", "3.11.0-resline.1", false},
+		{"v3.11.0-resline.1", "3.11.0-resline.2", false},
+		{"v3.11.0-resline.10", "3.11.0-resline.9", true},
+		{"v3.12.0-resline.1", "3.11.0-resline.4", true},
+		{"v3.11.0-resline.3", "3.12.0-resline.1", false},
+		// a node running plain upstream is behind the fork build of its base.
+		{"v3.11.0-resline.1", "3.11.0", true},
 	}
 
 	for _, tc := range cases {
