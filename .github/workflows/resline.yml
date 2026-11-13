@@ -22,6 +22,15 @@ jobs:
       - uses: actions/checkout@v7
       - run: .github/resline/check-upstream-urls.sh
 
+  comment-length:
+    name: Comment blocks within 2 lines
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - run: .github/resline/check-comment-length.py
+
   tag-matches-version:
     name: Tag matches the embedded version
     if: startsWith(github.ref, 'refs/tags/')
